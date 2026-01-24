@@ -17,13 +17,14 @@ Protocol:
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from framework.runtime.core import Runtime
 from framework.llm.provider import LLMProvider, Tool
+from framework.runtime.core import Runtime
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class NodeSpec(BaseModel):
             system_prompt="You are a calculator..."
         )
     """
+
     id: str
     name: str
     description: str
@@ -55,51 +57,27 @@ class NodeSpec(BaseModel):
     # Node behavior type
     node_type: str = Field(
         default="llm_tool_use",
-        description="Type: 'llm_tool_use', 'llm_generate', 'function', 'router', 'human_input'"
+        description="Type: 'llm_tool_use', 'llm_generate', 'function', 'router', 'human_input'",
     )
 
     # Data flow
-    input_keys: list[str] = Field(
-        default_factory=list,
-        description="Keys this node reads from shared memory or input"
-    )
-    output_keys: list[str] = Field(
-        default_factory=list,
-        description="Keys this node writes to shared memory or output"
-    )
+    input_keys: list[str] = Field(default_factory=list, description="Keys this node reads from shared memory or input")
+    output_keys: list[str] = Field(default_factory=list, description="Keys this node writes to shared memory or output")
 
     # For LLM nodes
-    system_prompt: str | None = Field(
-        default=None,
-        description="System prompt for LLM nodes"
-    )
-    tools: list[str] = Field(
-        default_factory=list,
-        description="Tool names this node can use"
-    )
-    model: str | None = Field(
-        default=None,
-        description="Specific model to use (defaults to graph default)"
-    )
+    system_prompt: str | None = Field(default=None, description="System prompt for LLM nodes")
+    tools: list[str] = Field(default_factory=list, description="Tool names this node can use")
+    model: str | None = Field(default=None, description="Specific model to use (defaults to graph default)")
 
     # For function nodes
-    function: str | None = Field(
-        default=None,
-        description="Function name or path for function nodes"
-    )
+    function: str | None = Field(default=None, description="Function name or path for function nodes")
 
     # For router nodes
-    routes: dict[str, str] = Field(
-        default_factory=dict,
-        description="Condition -> target_node_id mapping for routers"
-    )
+    routes: dict[str, str] = Field(default_factory=dict, description="Condition -> target_node_id mapping for routers")
 
     # Retry behavior
     max_retries: int = Field(default=3)
-    retry_on: list[str] = Field(
-        default_factory=list,
-        description="Error types to retry on"
-    )
+    retry_on: list[str] = Field(default_factory=list, description="Error types to retry on")
 
     model_config = {"extra": "allow"}
 
@@ -112,6 +90,7 @@ class SharedMemory:
     Nodes read and write to shared memory using typed keys.
     The memory is scoped to a single run.
     """
+
     _data: dict[str, Any] = field(default_factory=dict)
     _allowed_read: set[str] = field(default_factory=set)
     _allowed_write: set[str] = field(default_factory=set)
@@ -159,6 +138,7 @@ class NodeContext:
     - Access to tools (for actions)
     - The goal context (for guidance)
     """
+
     # Core runtime
     runtime: Runtime
 
@@ -194,6 +174,7 @@ class NodeResult:
     - State changes made
     - Route decision (for routers)
     """
+
     success: bool
     output: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
@@ -221,6 +202,7 @@ class NodeResult:
 
         # Use Haiku to generate intelligent summary
         import os
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
 
         if not api_key:
@@ -235,25 +217,28 @@ class NodeResult:
 
         # Use Haiku to generate intelligent summary
         try:
-            import anthropic
             import json
+
+            import anthropic
 
             node_context = ""
             if node_spec:
                 node_context = f"\nNode: {node_spec.name}\nPurpose: {node_spec.description}"
 
-            prompt = f"""Generate a 1-2 sentence human-readable summary of what this node produced.{node_context}
-
-Node output:
-{json.dumps(self.output, indent=2, default=str)[:2000]}
-
-Provide a concise, clear summary that a human can quickly understand. Focus on the key information produced."""
+            output_json = json.dumps(self.output, indent=2, default=str)[:2000]
+            prompt = (
+                "Generate a 1-2 sentence human-readable summary of what this "
+                f"node produced.{node_context}\n\n"
+                f"Node output:\n{output_json}\n\n"
+                "Provide a concise, clear summary that a human can quickly "
+                "understand. Focus on the key information produced."
+            )
 
             client = anthropic.Anthropic(api_key=api_key)
             message = client.messages.create(
                 model="claude-3-5-haiku-20241022",
                 max_tokens=200,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
 
             summary = message.content[0].text.strip()
@@ -381,17 +366,21 @@ class LLMNode(NodeProtocol):
 
             # Log the LLM call details
             logger.info("      🤖 LLM Call:")
-            logger.info(f"         System: {system[:150]}..." if len(system) > 150 else f"         System: {system}")
-            logger.info(f"         User message: {messages[-1]['content'][:150]}..." if len(messages[-1]['content']) > 150 else f"         User message: {messages[-1]['content']}")
+            sys_preview = system[:150] + "..." if len(system) > 150 else system
+            logger.info(f"         System: {sys_preview}")
+            user_msg = messages[-1]["content"]
+            msg_preview = user_msg[:150] + "..." if len(user_msg) > 150 else user_msg
+            logger.info(f"         User message: {msg_preview}")
             if ctx.available_tools:
                 logger.info(f"         Tools available: {[t.name for t in ctx.available_tools]}")
 
             # Call LLM
             if ctx.available_tools and self.tool_executor:
-                from framework.llm.provider import ToolUse, ToolResult
+                from framework.llm.provider import ToolResult, ToolUse
 
                 def executor(tool_use: ToolUse) -> ToolResult:
-                    logger.info(f"         🔧 Tool call: {tool_use.name}({', '.join(f'{k}={v}' for k, v in tool_use.input.items())})")
+                    args_str = ", ".join(f"{k}={v}" for k, v in tool_use.input.items())
+                    logger.info(f"         🔧 Tool call: {tool_use.name}({args_str})")
                     result = self.tool_executor(tool_use)
                     # Truncate long results
                     result_str = str(result.content)[:150]
@@ -413,9 +402,10 @@ class LLMNode(NodeProtocol):
                 )
 
             # Log the response
-            response_preview = response.content[:200] if len(response.content) > 200 else response.content
             if len(response.content) > 200:
-                response_preview += "..."
+                response_preview = response.content[:200] + "..."
+            else:
+                response_preview = response.content
             logger.info(f"      ← Response: {response_preview}")
 
             latency_ms = int((time.time() - start) * 1000)
@@ -432,7 +422,9 @@ class LLMNode(NodeProtocol):
             output = self._parse_output(response.content, ctx.node_spec)
 
             # For llm_generate and llm_tool_use nodes, try to parse JSON and extract fields
-            if ctx.node_spec.node_type in ("llm_generate", "llm_tool_use") and len(ctx.node_spec.output_keys) > 1:
+            is_llm_node = ctx.node_spec.node_type in ("llm_generate", "llm_tool_use")
+            has_multiple_outputs = len(ctx.node_spec.output_keys) > 1
+            if is_llm_node and has_multiple_outputs:
                 try:
                     import json
 
@@ -446,7 +438,8 @@ class LLMNode(NodeProtocol):
                                 ctx.memory.write(key, parsed[key])
                                 output[key] = parsed[key]
                             elif key in ctx.input_data:
-                                # Key not in parsed JSON but exists in input - pass through input value
+                                # Key not in parsed JSON but exists in input
+                                # Pass through input value
                                 ctx.memory.write(key, ctx.input_data[key])
                                 output[key] = ctx.input_data[key]
                             else:
@@ -508,7 +501,7 @@ class LLMNode(NodeProtocol):
             content = raw_response.strip()
             # Remove markdown code blocks if present
             if content.startswith("```"):
-                match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', content, re.DOTALL)
+                match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
                 if match:
                     content = match.group(1).strip()
 
@@ -520,15 +513,16 @@ class LLMNode(NodeProtocol):
 
         # JSON parse failed - use Haiku to extract clean JSON
         import os
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             # No API key, try one more simple extraction
             try:
                 # Find first { and last }
-                start = raw_response.find('{')
-                end = raw_response.rfind('}')
+                start = raw_response.find("{")
+                end = raw_response.rfind("}")
                 if start != -1 and end != -1:
-                    json_str = raw_response[start:end+1]
+                    json_str = raw_response[start : end + 1]
                     return json.loads(json_str)
             except (ValueError, json.JSONDecodeError):
                 pass
@@ -536,31 +530,31 @@ class LLMNode(NodeProtocol):
 
         # Use Haiku to clean the response
         from framework.llm.anthropic import AnthropicProvider
+
         haiku = AnthropicProvider(model="claude-3-5-haiku-20241022")
 
-        prompt = f"""Extract the JSON object from this LLM response. Extract ONLY the values that the LLM actually generated.
-
-Expected output keys: {output_keys}
-
-LLM Response:
-{raw_response}
-
-IMPORTANT:
-- Only extract keys that the LLM explicitly output in its response
-- Do NOT include keys that were just mentioned or passed through from input
-- If the LLM output multiple pieces of text/JSON, extract the LAST JSON object only
-- Output ONLY valid JSON with no extra text, no markdown, no explanations"""
+        prompt = (
+            "Extract the JSON object from this LLM response. "
+            "Extract ONLY the values that the LLM actually generated.\n\n"
+            f"Expected output keys: {output_keys}\n\n"
+            f"LLM Response:\n{raw_response}\n\n"
+            "IMPORTANT:\n"
+            "- Only extract keys that the LLM explicitly output in its response\n"
+            "- Do NOT include keys that were just mentioned or passed through from input\n"
+            "- If the LLM output multiple pieces of text/JSON, extract the LAST JSON object only\n"
+            "- Output ONLY valid JSON with no extra text, no markdown, no explanations"
+        )
 
         try:
             result = haiku.complete(
                 messages=[{"role": "user", "content": prompt}],
-                system="You extract clean JSON from messy responses. Output only valid JSON, nothing else.",
+                system=("You extract clean JSON from messy responses. Output only valid JSON, nothing else."),
             )
 
             cleaned = result.content.strip()
             # Remove markdown if Haiku added it
             if cleaned.startswith("```"):
-                match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', cleaned, re.DOTALL)
+                match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", cleaned, re.DOTALL)
                 if match:
                     cleaned = match.group(1).strip()
 
@@ -598,6 +592,7 @@ IMPORTANT:
 
         # Use Haiku to intelligently extract relevant data
         import os
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             # Fallback to simple formatting if no API key
@@ -610,24 +605,27 @@ IMPORTANT:
 
         # Build prompt for Haiku to extract clean values
         import json
-        prompt = f"""Extract the following information from the memory context:
 
-Required fields: {', '.join(ctx.node_spec.input_keys)}
-
-Memory context (may contain nested data, JSON strings, or extra information):
-{json.dumps(memory_data, indent=2, default=str)[:3000]}
-
-Extract ONLY the clean values for the required fields. Ignore nested structures, JSON wrappers, and irrelevant data.
-
-Output as JSON with the exact field names requested."""
+        fields = ", ".join(ctx.node_spec.input_keys)
+        memory_json = json.dumps(memory_data, indent=2, default=str)[:3000]
+        prompt = (
+            "Extract the following information from the memory context:\n\n"
+            f"Required fields: {fields}\n\n"
+            "Memory context (may contain nested data, JSON strings, "
+            f"or extra information):\n{memory_json}\n\n"
+            "Extract ONLY the clean values for the required fields. "
+            "Ignore nested structures, JSON wrappers, and irrelevant data.\n\n"
+            "Output as JSON with the exact field names requested."
+        )
 
         try:
             import anthropic
+
             client = anthropic.Anthropic(api_key=api_key)
             message = client.messages.create(
                 model="claude-3-5-haiku-20241022",
                 max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
             )
 
             # Parse Haiku's response
@@ -635,7 +633,8 @@ Output as JSON with the exact field names requested."""
 
             # Try to extract JSON
             import re
-            json_match = re.search(r'\{[^{}]*\}', response_text, re.DOTALL)
+
+            json_match = re.search(r"\{[^{}]*\}", response_text, re.DOTALL)
             if json_match:
                 extracted = json.loads(json_match.group())
                 # Format as key: value pairs
@@ -708,11 +707,13 @@ class RouterNode(NodeProtocol):
         # Build options from routes
         options = []
         for condition, target in ctx.node_spec.routes.items():
-            options.append({
-                "id": condition,
-                "description": f"Route to {target} when condition '{condition}' is met",
-                "target": target,
-            })
+            options.append(
+                {
+                    "id": condition,
+                    "description": f"Route to {target} when condition '{condition}' is met",
+                    "target": target,
+                }
+            )
 
         # Check if we should use LLM-based routing
         if ctx.node_spec.system_prompt and ctx.llm:
@@ -765,10 +766,9 @@ class RouterNode(NodeProtocol):
         import json
 
         # Build routing options description
-        options_desc = "\n".join([
-            f"- {opt['id']}: {opt['description']} → goes to '{opt['target']}'"
-            for opt in options
-        ])
+        options_desc = "\n".join(
+            [f"- {opt['id']}: {opt['description']} → goes to '{opt['target']}'" for opt in options]
+        )
 
         # Build context
         context_data = {
@@ -795,15 +795,17 @@ Respond with ONLY a JSON object:
         logger.info("      🤔 Router using LLM to choose path...")
 
         try:
+            default_system = "You are a routing agent. Respond with JSON only."
             response = ctx.llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                system=ctx.node_spec.system_prompt or "You are a routing agent. Respond with JSON only.",
+                system=ctx.node_spec.system_prompt or default_system,
                 max_tokens=150,
             )
 
             # Parse response
             import re
-            json_match = re.search(r'\{[^{}]*\}', response.content, re.DOTALL)
+
+            json_match = re.search(r"\{[^{}]*\}", response.content, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
                 chosen = data.get("chosen", "default")
@@ -813,7 +815,8 @@ Respond with ONLY a JSON object:
                 logger.info(f"         Reason: {reasoning}")
 
                 # Find the target for this choice
-                target = ctx.node_spec.routes.get(chosen, ctx.node_spec.routes.get("default", "end"))
+                default_target = ctx.node_spec.routes.get("default", "end")
+                target = ctx.node_spec.routes.get(chosen, default_target)
                 return (chosen, target)
 
         except Exception as e:
@@ -864,10 +867,12 @@ class FunctionNode(NodeProtocol):
 
         decision_id = ctx.runtime.decide(
             intent=f"Execute function {ctx.node_spec.function or 'unknown'}",
-            options=[{
-                "id": "execute",
-                "description": f"Run function with inputs: {list(ctx.input_data.keys())}",
-            }],
+            options=[
+                {
+                    "id": "execute",
+                    "description": f"Run function with inputs: {list(ctx.input_data.keys())}",
+                }
+            ],
             chosen="execute",
             reasoning="Deterministic function execution",
         )

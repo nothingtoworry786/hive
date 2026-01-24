@@ -10,28 +10,30 @@ The executor:
 """
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
-from framework.runtime.core import Runtime
+from framework.graph.edge import GraphSpec
 from framework.graph.goal import Goal
 from framework.graph.node import (
-    NodeSpec,
-    NodeContext,
-    NodeResult,
-    NodeProtocol,
-    SharedMemory,
-    LLMNode,
-    RouterNode,
     FunctionNode,
+    LLMNode,
+    NodeContext,
+    NodeProtocol,
+    NodeResult,
+    NodeSpec,
+    RouterNode,
+    SharedMemory,
 )
-from framework.graph.edge import GraphSpec
 from framework.llm.provider import LLMProvider, Tool
+from framework.runtime.core import Runtime
 
 
 @dataclass
 class ExecutionResult:
     """Result of executing a graph."""
+
     success: bool
     output: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
@@ -125,7 +127,8 @@ class GraphExecutor:
             # Restore memory from previous session
             for key, value in session_state["memory"].items():
                 memory.write(key, value)
-            self.logger.info(f"📥 Restored session state with {len(session_state['memory'])} memory keys")
+            num_keys = len(session_state["memory"])
+            self.logger.info(f"📥 Restored session state with {num_keys} memory keys")
 
         # Write new input data to memory (each key individually)
         if input_data:
@@ -212,7 +215,9 @@ class GraphExecutor:
                 result = await node_impl.execute(ctx)
 
                 if result.success:
-                    self.logger.info(f"   ✓ Success (tokens: {result.tokens_used}, latency: {result.latency_ms}ms)")
+                    tokens = result.tokens_used
+                    latency = result.latency_ms
+                    self.logger.info(f"   ✓ Success (tokens: {tokens}, latency: {latency}ms)")
 
                     # Generate and log human-readable summary
                     summary = result.to_summary(node_spec)
@@ -393,10 +398,7 @@ class GraphExecutor:
 
         if node_spec.node_type == "function":
             # Function nodes need explicit registration
-            raise RuntimeError(
-                f"Function node '{node_spec.id}' not registered. "
-                "Register with node_registry."
-            )
+            raise RuntimeError(f"Function node '{node_spec.id}' not registered. Register with node_registry.")
 
         # Default to LLM node
         return LLMNode(tool_executor=self.tool_executor)

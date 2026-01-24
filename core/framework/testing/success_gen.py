@@ -9,9 +9,9 @@ import uuid
 from typing import TYPE_CHECKING
 
 from framework.graph.goal import Goal, SuccessCriterion
-from framework.testing.test_case import Test, TestType, ApprovalStatus
+from framework.llm.provider import Tool, ToolResult, ToolUse
 from framework.testing.prompts import SUCCESS_CRITERIA_TEST_PROMPT
-from framework.llm.provider import Tool, ToolUse, ToolResult
+from framework.testing.test_case import ApprovalStatus, Test, TestType
 
 if TYPE_CHECKING:
     from framework.llm.provider import LLMProvider
@@ -115,16 +115,15 @@ class SuccessCriteriaTestGenerator:
         def tool_executor(tool_use: ToolUse) -> ToolResult:
             if tool_use.name == "submit_test":
                 collected_tests.append(tool_use.input)
-                return ToolResult(
-                    tool_use_id=tool_use.id, content="Test recorded successfully"
-                )
-            return ToolResult(
-                tool_use_id=tool_use.id, content="Unknown tool", is_error=True
-            )
+                return ToolResult(tool_use_id=tool_use.id, content="Test recorded successfully")
+            return ToolResult(tool_use_id=tool_use.id, content="Unknown tool", is_error=True)
 
         self.llm.complete_with_tools(
             messages=[{"role": "user", "content": prompt}],
-            system="You are a test generation expert. For each success criterion, call the submit_test tool with the test details.",
+            system=(
+                "You are a test generation expert. "
+                "For each success criterion, call the submit_test tool with the test details."
+            ),
             tools=[SUBMIT_TEST_TOOL],
             tool_executor=tool_executor,
             max_iterations=12,
@@ -172,12 +171,8 @@ class SuccessCriteriaTestGenerator:
         def tool_executor(tool_use: ToolUse) -> ToolResult:
             if tool_use.name == "submit_test":
                 collected_tests.append(tool_use.input)
-                return ToolResult(
-                    tool_use_id=tool_use.id, content="Test recorded successfully"
-                )
-            return ToolResult(
-                tool_use_id=tool_use.id, content="Unknown tool", is_error=True
-            )
+                return ToolResult(tool_use_id=tool_use.id, content="Test recorded successfully")
+            return ToolResult(tool_use_id=tool_use.id, content="Unknown tool", is_error=True)
 
         self.llm.complete_with_tools(
             messages=[{"role": "user", "content": prompt}],
@@ -206,9 +201,7 @@ class SuccessCriteriaTestGenerator:
 - Weight: {criterion.weight}
 - Currently met: {criterion.met}"""
 
-    def _create_tests_from_collected(
-        self, collected: list[dict], goal_id: str
-    ) -> list[Test]:
+    def _create_tests_from_collected(self, collected: list[dict], goal_id: str) -> list[Test]:
         """Create Test objects from tool call data."""
         tests = []
         for td in collected:

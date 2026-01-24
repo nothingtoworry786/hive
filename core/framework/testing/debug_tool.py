@@ -13,16 +13,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from framework.testing.test_case import Test
-from framework.testing.test_result import TestResult, ErrorCategory
-from framework.testing.test_storage import TestStorage
 from framework.testing.categorizer import ErrorCategorizer
+from framework.testing.test_case import Test
+from framework.testing.test_result import ErrorCategory, TestResult
+from framework.testing.test_storage import TestStorage
 
 
 class DebugInfo(BaseModel):
     """
     Comprehensive debug information for a failed test.
     """
+
     test_id: str
     test_name: str
 
@@ -239,12 +240,10 @@ class DebugTool:
             return {
                 "execution_path": run.metrics.nodes_executed if hasattr(run, "metrics") else [],
                 "decisions": [
-                    d.model_dump() if hasattr(d, "model_dump") else str(d)
-                    for d in getattr(run, "decisions", [])
+                    d.model_dump() if hasattr(d, "model_dump") else str(d) for d in getattr(run, "decisions", [])
                 ],
                 "problems": [
-                    p.model_dump() if hasattr(p, "model_dump") else str(p)
-                    for p in getattr(run, "problems", [])
+                    p.model_dump() if hasattr(p, "model_dump") else str(p) for p in getattr(run, "problems", [])
                 ],
                 "status": run.status.value if hasattr(run, "status") else "unknown",
             }
@@ -279,8 +278,7 @@ class DebugTool:
 
         if failures_by_category["uncategorized"]:
             suggestions.append(
-                f"Found {len(failures_by_category['uncategorized'])} uncategorized failures. "
-                "Manual review required."
+                f"Found {len(failures_by_category['uncategorized'])} uncategorized failures. Manual review required."
             )
 
         return suggestions

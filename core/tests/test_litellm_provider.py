@@ -10,11 +10,11 @@ For live tests (requires API keys):
 """
 
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from framework.llm.litellm import LiteLLMProvider
 from framework.llm.anthropic import AnthropicProvider
-from framework.llm.provider import LLMProvider, Tool, ToolUse, ToolResult
+from framework.llm.litellm import LiteLLMProvider
+from framework.llm.provider import LLMProvider, Tool, ToolResult, ToolUse
 
 
 class TestLiteLLMProviderInit:
@@ -41,11 +41,7 @@ class TestLiteLLMProviderInit:
 
     def test_init_with_api_base(self):
         """Test initialization with custom API base."""
-        provider = LiteLLMProvider(
-            model="gpt-4o-mini",
-            api_key="my-key",
-            api_base="https://my-proxy.com/v1"
-        )
+        provider = LiteLLMProvider(model="gpt-4o-mini", api_key="my-key", api_base="https://my-proxy.com/v1")
         assert provider.api_base == "https://my-proxy.com/v1"
 
     def test_init_ollama_no_key_needed(self):
@@ -73,9 +69,7 @@ class TestLiteLLMProviderComplete:
         mock_completion.return_value = mock_response
 
         provider = LiteLLMProvider(model="gpt-4o-mini", api_key="test-key")
-        result = provider.complete(
-            messages=[{"role": "user", "content": "Hello"}]
-        )
+        result = provider.complete(messages=[{"role": "user", "content": "Hello"}])
 
         assert result.content == "Hello! I'm an AI assistant."
         assert result.model == "gpt-4o-mini"
@@ -102,10 +96,7 @@ class TestLiteLLMProviderComplete:
         mock_completion.return_value = mock_response
 
         provider = LiteLLMProvider(model="gpt-4o-mini", api_key="test-key")
-        provider.complete(
-            messages=[{"role": "user", "content": "Hello"}],
-            system="You are a helpful assistant."
-        )
+        provider.complete(messages=[{"role": "user", "content": "Hello"}], system="You are a helpful assistant.")
 
         call_kwargs = mock_completion.call_args[1]
         messages = call_kwargs["messages"]
@@ -131,18 +122,13 @@ class TestLiteLLMProviderComplete:
                 name="get_weather",
                 description="Get the weather for a location",
                 parameters={
-                    "properties": {
-                        "location": {"type": "string", "description": "City name"}
-                    },
-                    "required": ["location"]
-                }
+                    "properties": {"location": {"type": "string", "description": "City name"}},
+                    "required": ["location"],
+                },
             )
         ]
 
-        provider.complete(
-            messages=[{"role": "user", "content": "What's the weather?"}],
-            tools=tools
-        )
+        provider.complete(messages=[{"role": "user", "content": "What's the weather?"}], tools=tools)
 
         call_kwargs = mock_completion.call_args[1]
         assert "tools" in call_kwargs
@@ -187,22 +173,21 @@ class TestLiteLLMProviderToolUse:
             Tool(
                 name="get_weather",
                 description="Get the weather",
-                parameters={"properties": {"location": {"type": "string"}}, "required": ["location"]}
+                parameters={
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
             )
         ]
 
         def tool_executor(tool_use: ToolUse) -> ToolResult:
-            return ToolResult(
-                tool_use_id=tool_use.id,
-                content="Sunny, 22C",
-                is_error=False
-            )
+            return ToolResult(tool_use_id=tool_use.id, content="Sunny, 22C", is_error=False)
 
         result = provider.complete_with_tools(
             messages=[{"role": "user", "content": "What's the weather in London?"}],
             system="You are a weather assistant.",
             tools=tools,
-            tool_executor=tool_executor
+            tool_executor=tool_executor,
         )
 
         assert result.content == "The weather in London is sunny."
@@ -222,11 +207,9 @@ class TestToolConversion:
             name="search",
             description="Search the web",
             parameters={
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"}
-                },
-                "required": ["query"]
-            }
+                "properties": {"query": {"type": "string", "description": "Search query"}},
+                "required": ["query"],
+            },
         )
 
         result = provider._tool_to_openai_format(tool)
@@ -280,7 +263,7 @@ class TestAnthropicProviderBackwardCompatibility:
         result = provider.complete(
             messages=[{"role": "user", "content": "Hello"}],
             system="You are helpful.",
-            max_tokens=100
+            max_tokens=100,
         )
 
         assert result.content == "Hello from Claude!"
@@ -313,7 +296,7 @@ class TestAnthropicProviderBackwardCompatibility:
             Tool(
                 name="get_time",
                 description="Get current time",
-                parameters={"properties": {}, "required": []}
+                parameters={"properties": {}, "required": []},
             )
         ]
 
@@ -324,7 +307,7 @@ class TestAnthropicProviderBackwardCompatibility:
             messages=[{"role": "user", "content": "What time is it?"}],
             system="You are a time assistant.",
             tools=tools,
-            tool_executor=tool_executor
+            tool_executor=tool_executor,
         )
 
         assert result.content == "The time is 3:00 PM."

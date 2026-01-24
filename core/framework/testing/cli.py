@@ -14,11 +14,10 @@ import subprocess
 from pathlib import Path
 
 from framework.graph.goal import Goal
-from framework.testing.test_storage import TestStorage
+from framework.testing.approval_cli import interactive_approval
 from framework.testing.constraint_gen import ConstraintTestGenerator
 from framework.testing.success_gen import SuccessCriteriaTestGenerator
-from framework.testing.approval_cli import interactive_approval
-
+from framework.testing.test_storage import TestStorage
 
 DEFAULT_STORAGE_PATH = Path("exports")
 
@@ -173,6 +172,7 @@ def cmd_test_generate(args: argparse.Namespace) -> int:
     # Get LLM provider
     try:
         from framework.llm import AnthropicProvider
+
         llm = AnthropicProvider()
     except Exception as e:
         print(f"Error: Failed to initialize LLM provider: {e}")
@@ -376,6 +376,7 @@ def cmd_test_list(args: argparse.Namespace) -> int:
     # Filter by status
     if args.status != "all":
         from framework.testing.test_case import ApprovalStatus
+
         try:
             filter_status = ApprovalStatus(args.status)
             tests = [t for t in tests if t.approval_status == filter_status]
