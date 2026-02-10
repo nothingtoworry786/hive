@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from pydantic import SecretStr
+
 from framework.credentials import (
     BearerTokenProvider,
     CredentialKey,
@@ -22,7 +24,6 @@ from framework.credentials import (
     CredentialType,
     StaticProvider,
 )
-from pydantic import SecretStr
 
 
 class TestStaticProvider:
